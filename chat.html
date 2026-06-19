@@ -111,7 +111,7 @@
      Config
   ====================================================================== */
   const SUPABASE_URL = 'https://higyutsevlmuqbimhmai.supabase.co'
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZ3l1dHNldmxtdXFiaW1obWFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTEzMjksImV4cCI6MjA5NzI4NzMyOX0.5YxxXwiDws72MMw2u9GPFjZa-IqPt1eQrkyzpbjPBsE'
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZ3l1dHNldmxtdXFiaW1obWFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTEzMjksImV4cCI6MjA5NzI4NzMyOX0.5[...]
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   const DEFAULT_ROOMS = ['general', 'random']
@@ -231,14 +231,24 @@
   }
 
   /* =====================================================================
-     Auth gate
+     Auth gate — FIXED: Wait for session establishment before redirecting
   ====================================================================== */
+  let authCheckComplete = false
+  
   supabase.auth.getSession().then(({ data: { session } }) => {
-    if (!session) { window.location.href = 'login.html'; return }
-    boot(session)
+    if (!session) { 
+      window.location.href = 'login.html'
+    } else {
+      authCheckComplete = true
+      boot(session)
+    }
   })
+  
   supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) window.location.href = 'login.html'
+    // Only redirect if auth check is complete (i.e., not the initial getSession call)
+    if (authCheckComplete && !session) {
+      window.location.href = 'login.html'
+    }
   })
 
   async function boot(session) {
