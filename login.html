@@ -334,7 +334,7 @@
   async function signInWithProvider(provider) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: window.location.origin + window.location.pathname.replace('login.html', 'chat.html') },
+      options: { redirectTo: 'https://bhowmickpallab875-ai.github.io/wire/chat.html' },
     })
     if (error) showToast(error.message, 'error')
   }
