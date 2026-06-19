@@ -231,25 +231,28 @@
   }
 
   /* =====================================================================
-     Auth gate — FIXED: Wait for session establishment before redirecting
+     Auth gate — FIXED: Check session first, then setup listener
   ====================================================================== */
-  let authCheckComplete = false
-  
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (!session) { 
+  async function initAuth() {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
       window.location.href = 'login.html'
-    } else {
-      authCheckComplete = true
-      boot(session)
+      return
     }
-  })
-  
-  supabase.auth.onAuthStateChange((_event, session) => {
-    // Only redirect if auth check is complete (i.e., not the initial getSession call)
-    if (authCheckComplete && !session) {
-      window.location.href = 'login.html'
-    }
-  })
+    
+    // Session exists, boot the app
+    await boot(session)
+    
+    // ONLY after session check is complete, listen for auth changes (sign out events)
+    supabase.auth.onAuthStateChange((_event, currentSession) => {
+      if (!currentSession) {
+        window.location.href = 'login.html'
+      }
+    })
+  }
+
+  initAuth()
 
   async function boot(session) {
     currentUser = session.user
