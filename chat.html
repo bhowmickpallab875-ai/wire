@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Wire — chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="toastStack" class="toast-stack" aria-live="polite"></div>
+<div id="connectionBanner" class="connection-banner hidden">Reconnecting…</div>
+
+<div class="chat-shell">
+
+  <!-- =====================================================================
+       Sidebar — rooms, presence, profile, theme
+  ====================================================================== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="wordmark sm" style="color: var(--accent)">WIRE</span>
+      <div class="flex gap-xs">
+        <button class="btn-icon" id="themeToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <button class="btn-icon" id="closeSidebarBtn" title="Close" aria-label="Close sidebar">✕</button>
+      </div>
+    </div>
+
+    <!-- Profile -->
+    <button class="flex items-center gap-sm" id="profileBtn" style="background:none;border:none;padding:6px;border-radius:8px;text-align:left;cursor:pointer;">
+      <span class="avatar sm" id="myAvatar">·</span>
+      <span class="flex-col" style="min-width:0;">
+        <span class="text-sm" id="myUsername" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">…</span>
+        <span class="text-xs text-faint">Edit profile</span>
+      </span>
+    </button>
+
+    <!-- Rooms -->
+    <div>
+      <div class="sidebar-section-title">Rooms</div>
+      <ul class="room-list" id="roomList"></ul>
+      <div class="new-room-row" style="margin-top:6px;">
+        <input id="newRoomInput" class="mono" placeholder="new-room" />
+        <button class="btn btn-ghost" id="newRoomBtn" style="padding:8px 10px;">+</button>
+      </div>
+    </div>
+
+    <!-- Presence -->
+    <div>
+      <div class="sidebar-section-title">Online in this room</div>
+      <ul class="presence-list" id="presenceList"></ul>
+    </div>
+
+    <div class="grow"></div>
+    <button class="btn btn-ghost" id="signOutBtn">Sign out</button>
+  </aside>
+
+  <!-- =====================================================================
+       Main chat column
+  ====================================================================== -->
+  <main class="chat-main">
+    <header class="topbar">
+      <button class="btn-icon" id="openSidebarBtn" title="Rooms" aria-label="Open rooms" style="display:none;">☰</button>
+      <span class="pulse-dot" id="pulse"></span>
+      <span class="room-title" id="roomTitle">#general</span>
+      <div class="spacer"></div>
+      <input id="searchInput" placeholder="Search this room…" style="width:160px;padding:7px 10px;font-size:13px;" />
+    </header>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="typing-row" id="typingRow"></div>
+
+    <button class="btn-icon scroll-to-bottom hidden" id="scrollBottomBtn" title="Scroll to latest" aria-label="Scroll to latest">↓</button>
+
+    <div class="composer-wrap">
+      <div class="emoji-picker hidden" id="emojiPicker"></div>
+      <form class="composer" id="composer">
+        <button type="button" class="btn-icon" id="emojiBtn" aria-label="Insert emoji">🙂</button>
+        <textarea id="msgInput" rows="1" placeholder="Type a message…" autocomplete="off"></textarea>
+        <button type="submit" class="btn btn-primary" id="sendBtn">Send</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<!-- ===========================================================================
+     Edit profile modal
+============================================================================ -->
+<div class="modal-backdrop hidden" id="profileModalBackdrop">
+  <div class="modal">
+    <h3 style="margin-bottom:14px;">Edit profile</h3>
+    <div class="field">
+      <label for="profileUsernameInput">Username</label>
+      <input id="profileUsernameInput" minlength="3" maxlength="20" />
+      <div class="field-error" id="profileUsernameError"></div>
+    </div>
+    <div class="flex gap-sm" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-ghost" id="profileCancelBtn" type="button">Cancel</button>
+      <button class="btn btn-primary" id="profileSaveBtn" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+  /* =====================================================================
+     Config
+  ====================================================================== */
+  const SUPABASE_URL = 'https://higyutsevlmuqbimhmai.supabase.co'
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZ3l1dHNldmxtdXFiaW1obWFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTEzMjksImV4cCI6MjA5NzI4NzMyOX0.5YxxXwiDws72MMw2u9GPFjZa-IqPt1eQrkyzpbjPBsE'
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  const DEFAULT_ROOMS = ['general', 'random']
+  const EMOJIS = ['😀','😂','😍','👍','🙏','🎉','🔥','😢','😮','❤️','👀','🚀','💯','😅','🤔','✅']
+  const TYPING_TIMEOUT_MS = 3000
+
+  /* =====================================================================
+     Element refs
+  ====================================================================== */
+  const $ = (id) => document.getElementById(id)
+
+  const themeToggle = $('themeToggle')
+  const toastStack = $('toastStack')
+  const connectionBanner = $('connectionBanner')
+
+  const sidebar = $('sidebar')
+  const openSidebarBtn = $('openSidebarBtn')
+  const closeSidebarBtn = $('closeSidebarBtn')
+  const roomList = $('roomList')
+  const newRoomInput = $('newRoomInput')
+  const newRoomBtn = $('newRoomBtn')
+  const presenceList = $('presenceList')
+  const signOutBtn = $('signOutBtn')
+
+  const myAvatar = $('myAvatar')
+  const myUsername = $('myUsername')
+  const profileBtn = $('profileBtn')
+  const profileModalBackdrop = $('profileModalBackdrop')
+  const profileUsernameInput = $('profileUsernameInput')
+  const profileUsernameError = $('profileUsernameError')
+  const profileCancelBtn = $('profileCancelBtn')
+  const profileSaveBtn = $('profileSaveBtn')
+
+  const pulse = $('pulse')
+  const roomTitle = $('roomTitle')
+  const searchInput = $('searchInput')
+  const messagesEl = $('messages')
+  const typingRow = $('typingRow')
+  const scrollBottomBtn = $('scrollBottomBtn')
+
+  const emojiBtn = $('emojiBtn')
+  const emojiPicker = $('emojiPicker')
+  const composer = $('composer')
+  const msgInput = $('msgInput')
+  const sendBtn = $('sendBtn')
+
+  /* =====================================================================
+     State
+  ====================================================================== */
+  let currentUser = null
+  let myUsernameValue = ''
+  let currentRoom = 'general'
+  let knownRooms = new Set(DEFAULT_ROOMS)
+  let dbChannel = null       // postgres_changes for messages
+  let presenceChannel = null // presence + typing broadcast for the room
+  let allMessages = []       // messages currently loaded for the room
+  const profileCache = {}    // user_id -> username
+  let typingTimeout = null
+  let othersTyping = new Map() // user_id -> username, currently typing
+
+  /* =====================================================================
+     Theme
+  ====================================================================== */
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme)
+    themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙'
+  }
+  let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  applyTheme(theme)
+  themeToggle.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark'
+    applyTheme(theme)
+  })
+
+  /* =====================================================================
+     Toasts
+  ====================================================================== */
+  function showToast(message, type = 'info', timeout = 3500) {
+    const el = document.createElement('div')
+    el.className = 'toast ' + (type === 'error' ? 'error' : type === 'warn' ? 'warn' : '')
+    el.textContent = message
+    toastStack.appendChild(el)
+    setTimeout(() => el.remove(), timeout)
+  }
+
+  /* =====================================================================
+     Sidebar (mobile)
+  ====================================================================== */
+  function checkSidebarMode() {
+    const isMobile = window.innerWidth <= 720
+    openSidebarBtn.style.display = isMobile ? 'inline-flex' : 'none'
+    closeSidebarBtn.style.display = isMobile ? 'inline-flex' : 'none'
+    if (!isMobile) sidebar.classList.remove('open')
+  }
+  window.addEventListener('resize', checkSidebarMode)
+  checkSidebarMode()
+  openSidebarBtn.addEventListener('click', () => sidebar.classList.add('open'))
+  closeSidebarBtn.addEventListener('click', () => sidebar.classList.remove('open'))
+
+  /* =====================================================================
+     Avatar helpers — deterministic color + initial from username
+  ====================================================================== */
+  function hashString(str) {
+    let hash = 0
+    for (let i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i)
+    return Math.abs(hash)
+  }
+  function avatarClassFor(name) {
+    return 'av-' + (hashString(name || '?') % 6)
+  }
+  function initialFor(name) {
+    return (name || '?').trim().charAt(0).toUpperCase()
+  }
+  function applyAvatar(el, name, size) {
+    el.className = 'avatar ' + (size || '') + ' ' + avatarClassFor(name)
+    el.textContent = initialFor(name)
+  }
+
+  /* =====================================================================
+     Auth gate
+  ====================================================================== */
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!session) { window.location.href = 'login.html'; return }
+    boot(session)
+  })
+  supabase.auth.onAuthStateChange((_event, session) => {
+    if (!session) window.location.href = 'login.html'
+  })
+
+  async function boot(session) {
+    currentUser = session.user
+    await ensureProfile(currentUser)
+    applyAvatar(myAvatar, myUsernameValue, 'sm')
+    myUsername.textContent = myUsernameValue
+
+    await refreshKnownRooms()
+    renderRoomList()
+    await joinRoom('general')
+  }
+
+  // Fallback in case the profile-creation trigger isn't set up in Supabase yet
+  async function ensureProfile(user) {
+    const { data } = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle()
+    if (data?.username) {
+      myUsernameValue = data.username
+      return
+    }
+    const fallbackName = user.user_metadata?.username || user.email.split('@')[0]
+    await supabase.from('profiles').upsert({ id: user.id, username: fallbackName })
+    myUsernameValue = fallbackName
+  }
+
+  signOutBtn.addEventListener('click', () => supabase.auth.signOut())
+
+  /* =====================================================================
+     Profile modal
+  ====================================================================== */
+  profileBtn.addEventListener('click', () => {
+    profileUsernameInput.value = myUsernameValue
+    profileUsernameError.textContent = ''
+    profileModalBackdrop.classList.remove('hidden')
+  })
+  profileCancelBtn.addEventListener('click', () => profileModalBackdrop.classList.add('hidden'))
+  profileModalBackdrop.addEventListener('click', (e) => {
+    if (e.target === profileModalBackdrop) profileModalBackdrop.classList.add('hidden')
+  })
+  profileSaveBtn.addEventListener('click', async () => {
+    const newName = profileUsernameInput.value.trim()
+    if (newName.length < 3) { profileUsernameError.textContent = 'At least 3 characters.'; return }
+    const { error } = await supabase.from('profiles').update({ username: newName }).eq('id', currentUser.id)
+    if (error) { profileUsernameError.textContent = error.message; return }
+    myUsernameValue = newName
+    profileCache[currentUser.id] = newName
+    myUsername.textContent = newName
+    applyAvatar(myAvatar, newName, 'sm')
+    profileModalBackdrop.classList.add('hidden')
+    showToast('Profile updated.')
+  })
+
+  /* =====================================================================
+     Rooms
+  ====================================================================== */
+  async function refreshKnownRooms() {
+    const { data } = await supabase.from('messages').select('room_id').limit(500)
+    if (data) data.forEach((row) => knownRooms.add(row.room_id))
+  }
+
+  function renderRoomList() {
+    roomList.innerHTML = ''
+    Array.from(knownRooms).sort().forEach((roomId) => {
+      const li = document.createElement('li')
+      const btn = document.createElement('button')
+      btn.className = 'room-item' + (roomId === currentRoom ? ' active' : '')
+      btn.innerHTML = `<span class="mono">#</span><span>${escapeHtml(roomId)}</span>`
+      btn.addEventListener('click', () => {
+        joinRoom(roomId)
+        sidebar.classList.remove('open')
+      })
+      li.appendChild(btn)
+      roomList.appendChild(li)
+    })
+  }
+
+  newRoomBtn.addEventListener('click', () => {
+    const id = newRoomInput.value.trim().toLowerCase().replace(/\s+/g, '-')
+    if (!id) return
+    knownRooms.add(id)
+    newRoomInput.value = ''
+    renderRoomList()
+    joinRoom(id)
+    sidebar.classList.remove('open')
+  })
+  newRoomInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); newRoomBtn.click() }
+  })
+
+  async function joinRoom(roomId) {
+    if (dbChannel) supabase.removeChannel(dbChannel)
+    if (presenceChannel) supabase.removeChannel(presenceChannel)
+
+    currentRoom = roomId
+    roomTitle.textContent = '#' + roomId
+    knownRooms.add(roomId)
+    renderRoomList()
+
+    messagesEl.innerHTML = ''
+    allMessages = []
+    othersTyping.clear()
+    renderTyping()
+    pulse.classList.remove('live')
+    searchInput.value = ''
+
+    await loadMessages()
+    subscribeToMessages(roomId)
+    subscribeToPresence(roomId)
+  }
+
+  /* =====================================================================
+     Messages: load + render
+  ====================================================================== */
+  async function loadMessages() {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id, content, created_at, edited_at, user_id, profiles(username)')
+      .eq('room_id', currentRoom)
+      .order('created_at', { ascending: true })
+      .limit(200)
+
+    if (error) { showToast(error.message, 'error'); return }
+
+    data.forEach((m) => { if (m.profiles?.username) profileCache[m.user_id] = m.profiles.username })
+    allMessages = data
+    renderAllMessages()
+    scrollToBottom()
+  }
+
+  function renderAllMessages(filterText) {
+    messagesEl.innerHTML = ''
+    let lastDateLabel = ''
+    const query = (filterText || '').toLowerCase()
+
+    allMessages
+      .filter((m) => !query || m.content.toLowerCase().includes(query))
+      .forEach((m) => {
+        const dateLabel = new Date(m.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })
+        if (dateLabel !== lastDateLabel) {
+          const divider = document.createElement('div')
+          divider.className = 'date-divider'
+          divider.textContent = dateLabel
+          messagesEl.appendChild(divider)
+          lastDateLabel = dateLabel
+        }
+        messagesEl.appendChild(buildMessageNode(m))
+      })
+  }
+
+  searchInput.addEventListener('input', () => renderAllMessages(searchInput.value))
+
+  function buildMessageNode(m) {
+    const own = currentUser && m.user_id === currentUser.id
+    const username = profileCache[m.user_id] || m.profiles?.username || 'unknown'
+    const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    const wrap = document.createElement('div')
+    wrap.className = 'msg ' + (own ? 'own' : 'other')
+    wrap.dataset.id = m.id
+
+    const meta = document.createElement('div')
+    meta.className = 'meta mono'
+    meta.textContent = (own ? 'you' : username) + ' · ' + time
+    if (m.edited_at) {
+      const tag = document.createElement('span')
+      tag.className = 'edited-tag'
+      tag.textContent = '(edited)'
+      meta.appendChild(tag)
+    }
+
+    const bubble = document.createElement('div')
+    bubble.className = 'bubble'
+    bubble.textContent = m.content // textContent escapes content automatically
+
+    wrap.appendChild(meta)
+    wrap.appendChild(bubble)
+
+    if (own) {
+      const actions = document.createElement('div')
+      actions.className = 'msg-actions'
+
+      const editBtn = document.createElement('button')
+      editBtn.textContent = 'edit'
+      editBtn.addEventListener('click', () => startEdit(wrap, bubble, m))
+
+      const delBtn = document.createElement('button')
+      delBtn.textContent = 'delete'
+      delBtn.addEventListener('click', () => deleteMessage(m.id))
+
+      actions.appendChild(editBtn)
+      actions.appendChild(delBtn)
+      wrap.appendChild(actions)
+    }
+
+    return wrap
+  }
+
+  function startEdit(wrap, bubble, m) {
+    bubble.classList.add('editing')
+    bubble.innerHTML = ''
+    const textarea = document.createElement('textarea')
+    textarea.value = m.content
+    textarea.rows = 2
+    textarea.style.width = '220px'
+    bubble.appendChild(textarea)
+    textarea.focus()
+
+    const save = async () => {
+      const newContent = textarea.value.trim()
+      if (newContent && newContent !== m.content) {
+        const { error } = await supabase
+          .from('messages')
+          .update({ content: newContent, edited_at: new Date().toISOString() })
+          .eq('id', m.id)
+        if (error) showToast(error.message, 'error')
+      }
+      await loadMessages()
+    }
+    textarea.addEventListener('blur', save)
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); textarea.blur() }
+      if (e.key === 'Escape') { loadMessages() }
+    })
+  }
+
+  async function deleteMessage(id) {
+    if (!confirm('Delete this message?')) return
+    const { error } = await supabase.from('messages').delete().eq('id', id)
+    if (error) { showToast(error.message, 'error'); return }
+    await loadMessages()
+  }
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight
+    scrollBottomBtn.classList.add('hidden')
+  }
+  messagesEl.addEventListener('scroll', () => {
+    const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight
+    scrollBottomBtn.classList.toggle('hidden', distanceFromBottom < 120)
+  })
+  scrollBottomBtn.addEventListener('click', scrollToBottom)
+
+  /* =====================================================================
+     Realtime: new / edited / deleted messages
+  ====================================================================== */
+  function subscribeToMessages(roomId) {
+    dbChannel = supabase
+      .channel('messages:' + roomId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
+        async (payload) => {
+          if (!profileCache[payload.new.user_id]) await getUsername(payload.new.user_id)
+          allMessages.push(payload.new)
+          renderAllMessages(searchInput.value)
+          const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight
+          if (distanceFromBottom < 200 || payload.new.user_id === currentUser.id) scrollToBottom()
+        })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          allMessages = allMessages.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m))
+          renderAllMessages(searchInput.value)
+        })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          allMessages = allMessages.filter((m) => m.id !== payload.old.id)
+          renderAllMessages(searchInput.value)
+        })
+      .subscribe((status) => {
+        pulse.classList.toggle('live', status === 'SUBSCRIBED')
+        connectionBanner.classList.toggle('hidden', status === 'SUBSCRIBED')
+      })
+  }
+
+  async function getUsername(userId) {
+    if (profileCache[userId]) return profileCache[userId]
+    const { data } = await supabase.from('profiles').select('username').eq('id', userId).maybeSingle()
+    const name = data?.username || 'unknown'
+    profileCache[userId] = name
+    return name
+  }
+
+  /* =====================================================================
+     Presence + typing (Supabase Realtime Presence & Broadcast — no DB needed)
+  ====================================================================== */
+  function subscribeToPresence(roomId) {
+    presenceChannel = supabase.channel('presence:' + roomId, {
+      config: { presence: { key: currentUser.id } },
+    })
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => renderPresence(presenceChannel.presenceState()))
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        const { userId, username, isTyping } = payload.payload
+        if (userId === currentUser.id) return
+        if (isTyping) othersTyping.set(userId, username)
+        else othersTyping.delete(userId)
+        renderTyping()
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ username: myUsernameValue, online_at: new Date().toISOString() })
+        }
+      })
+  }
+
+  function renderPresence(state) {
+    presenceList.innerHTML = ''
+    Object.values(state).forEach((entries) => {
+      entries.forEach((entry) => {
+        const li = document.createElement('li')
+        li.className = 'presence-item'
+        const dot = document.createElement('span')
+        dot.className = 'pulse-dot live'
+        const name = document.createElement('span')
+        name.textContent = entry.username || 'someone'
+        li.appendChild(dot)
+        li.appendChild(name)
+        presenceList.appendChild(li)
+      })
+    })
+  }
+
+  function renderTyping() {
+    const names = Array.from(othersTyping.values())
+    if (names.length === 0) { typingRow.innerHTML = ''; return }
+    const label = names.length === 1 ? `${names[0]} is typing` : `${names.join(', ')} are typing`
+    typingRow.innerHTML = `<span>${escapeHtml(label)}</span><span class="typing-dots"><span></span><span></span><span></span></span>`
+  }
+
+  function broadcastTyping(isTyping) {
+    if (!presenceChannel) return
+    presenceChannel.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { userId: currentUser.id, username: myUsernameValue, isTyping },
+    })
+  }
+
+  msgInput.addEventListener('input', () => {
+    autoGrow(msgInput)
+    broadcastTyping(true)
+    clearTimeout(typingTimeout)
+    typingTimeout = setTimeout(() => broadcastTyping(false), TYPING_TIMEOUT_MS)
+  })
+
+  function autoGrow(textarea) {
+    textarea.style.height = 'auto'
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px'
+  }
+
+  /* =====================================================================
+     Emoji picker
+  ====================================================================== */
+  EMOJIS.forEach((emoji) => {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.textContent = emoji
+    btn.addEventListener('click', () => {
+      msgInput.value += emoji
+      msgInput.focus()
+      autoGrow(msgInput)
+    })
+    emojiPicker.appendChild(btn)
+  })
+  emojiBtn.addEventListener('click', () => emojiPicker.classList.toggle('hidden'))
+  document.addEventListener('click', (e) => {
+    if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.classList.add('hidden')
+  })
+
+  /* =====================================================================
+     Sending
+  ====================================================================== */
+  composer.addEventListener('submit', sendMessage)
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(e) }
+  })
+
+  async function sendMessage(e) {
+    e.preventDefault()
+    const content = msgInput.value.trim()
+    if (!content || !currentUser) return
+
+    msgInput.value = ''
+    autoGrow(msgInput)
+    clearTimeout(typingTimeout)
+    broadcastTyping(false)
+
+    sendBtn.disabled = true
+    const { error } = await supabase
+      .from('messages')
+      .insert({ room_id: currentRoom, user_id: currentUser.id, content })
+    sendBtn.disabled = false
+
+    if (error) showToast(error.message, 'error')
+  }
+
+  /* =====================================================================
+     Utils
+  ====================================================================== */
+  function escapeHtml(str) {
+    const div = document.createElement('div')
+    div.textContent = str
+    return div.innerHTML
+  }
+</script>
+</body>
+</html>

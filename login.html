@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wire — sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+  <!-- ===================================================================
+       Theme toggle — sits in the corner on every screen size
+  ==================================================================== -->
+  <button id="themeToggle" class="btn-icon theme-toggle-corner" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+
+  <!-- ===================================================================
+       Toast notifications — reused by every async action on this page
+  ==================================================================== -->
+  <div id="toastStack" class="toast-stack" aria-live="polite"></div>
+
+  <div class="login-wrap card">
+
+    <!-- =================================================================
+         Marketing panel — hidden on small screens, see style.css
+    ================================================================== -->
+    <div class="marketing-panel">
+      <div class="wordmark lg">WIRE</div>
+      <p class="tagline">Real-time messaging, built on Supabase. No backend to babysit.</p>
+      <div class="feature-list">
+        <div class="feature-item"><span class="dot"></span><span>Messages appear instantly, no refresh, powered by Postgres realtime.</span></div>
+        <div class="feature-item"><span class="dot"></span><span>Hop between rooms, or spin up a new one in a second.</span></div>
+        <div class="feature-item"><span class="dot"></span><span>See who's online and who's typing, live.</span></div>
+        <div class="feature-item"><span class="dot"></span><span>Your account is protected by Row Level Security on every table.</span></div>
+      </div>
+    </div>
+
+    <!-- =================================================================
+         Auth panel
+    ================================================================== -->
+    <div class="auth-panel">
+      <div class="wordmark md" style="color: var(--accent)">WIRE</div>
+
+      <!-- Mode tabs -->
+      <div class="tabs" id="modeTabs">
+        <button class="tab-btn active" data-mode="signin" type="button">Sign in</button>
+        <button class="tab-btn" data-mode="signup" type="button">Sign up</button>
+        <button class="tab-btn" data-mode="forgot" type="button">Reset</button>
+      </div>
+
+      <!-- =============================================================
+           Sign in form
+      ============================================================== -->
+      <form id="signinForm" class="auth-form">
+        <div class="field" id="signinEmailField">
+          <label for="signinEmail">Email</label>
+          <input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email" required />
+          <div class="field-error" id="signinEmailError"></div>
+        </div>
+        <div class="field" id="signinPasswordField">
+          <label for="signinPassword">Password</label>
+          <div class="input-wrap">
+            <input type="password" id="signinPassword" placeholder="••••••••" autocomplete="current-password" required />
+            <button type="button" class="input-toggle" data-target="signinPassword" aria-label="Show password">👁</button>
+          </div>
+          <div class="field-error" id="signinPasswordError"></div>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="rememberMe" style="width:auto;padding:0" />
+          Keep me signed in on this device
+        </label>
+        <button type="submit" class="btn btn-primary" id="signinSubmit">
+          <span class="btn-label">Sign in</span>
+        </button>
+        <button type="button" class="btn-link" id="resendConfirmBtn" style="display:none;">Resend confirmation email</button>
+      </form>
+
+      <!-- =============================================================
+           OAuth — shown under sign in AND sign up (same buttons, same handler)
+      ============================================================== -->
+      <div class="auth-divider" id="oauthDivider">or continue with</div>
+      <div class="oauth-row" id="oauthRow">
+        <button type="button" class="btn btn-oauth" id="googleOAuthBtn">
+          <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.94-2.91l-3.88-3c-1.08.72-2.45 1.15-4.06 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.27A12 12 0 0 0 0 12c0 1.94.46 3.78 1.27 5.39l4-3.11z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.27 6.61l4 3.11C6.22 6.86 8.87 4.75 12 4.75z"/></svg>
+          <span class="btn-label">Continue with Google</span>
+        </button>
+        <button type="button" class="btn btn-oauth" id="githubOAuthBtn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.5 0 12.3c0 5.44 3.44 10.05 8.21 11.68.6.12.82-.27.82-.6 0-.3-.01-1.08-.02-2.12-3.34.75-4.04-1.65-4.04-1.65-.55-1.43-1.34-1.82-1.34-1.82-1.09-.77.08-.75.08-.75 1.21.09 1.84 1.27 1.84 1.27 1.07 1.87 2.81 1.33 3.5 1.02.11-.79.42-1.33.76-1.64-2.67-.31-5.47-1.37-5.47-6.1 0-1.35.46-2.46 1.22-3.32-.12-.31-.53-1.55.12-3.23 0 0 1-.33 3.3 1.27a11.3 11.3 0 0 1 6 0c2.28-1.6 3.29-1.27 3.29-1.27.65 1.68.24 2.92.12 3.23.76.86 1.22 1.97 1.22 3.32 0 4.74-2.81 5.78-5.49 6.09.43.38.81 1.13.81 2.28 0 1.65-.01 2.98-.01 3.38 0 .33.21.72.83.6C20.57 22.34 24 17.74 24 12.3 24 5.5 18.63 0 12 0z"/></svg>
+          <span class="btn-label">Continue with GitHub</span>
+        </button>
+      </div>
+
+
+      <!-- =============================================================
+           Sign up form
+      ============================================================== -->
+      <form id="signupForm" class="auth-form hidden">
+        <div class="field" id="signupUsernameField">
+          <label for="signupUsername">Username</label>
+          <input type="text" id="signupUsername" placeholder="how others will see you" autocomplete="nickname" required minlength="3" maxlength="20" />
+          <div class="field-error" id="signupUsernameError"></div>
+        </div>
+        <div class="field" id="signupEmailField">
+          <label for="signupEmail">Email</label>
+          <input type="email" id="signupEmail" placeholder="you@example.com" autocomplete="email" required />
+          <div class="field-error" id="signupEmailError"></div>
+        </div>
+        <div class="field" id="signupPasswordField">
+          <label for="signupPassword">Password</label>
+          <div class="input-wrap">
+            <input type="password" id="signupPassword" placeholder="at least 6 characters" autocomplete="new-password" required minlength="6" />
+            <button type="button" class="input-toggle" data-target="signupPassword" aria-label="Show password">👁</button>
+          </div>
+          <div class="field-error" id="signupPasswordError"></div>
+        </div>
+        <div class="field" id="signupConfirmField">
+          <label for="signupConfirm">Confirm password</label>
+          <input type="password" id="signupConfirm" placeholder="repeat your password" autocomplete="new-password" required />
+          <div class="field-error" id="signupConfirmError"></div>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="agreeTerms" style="width:auto;padding:0" required />
+          I'll be reasonably nice to people in chat
+        </label>
+        <button type="submit" class="btn btn-primary" id="signupSubmit">
+          <span class="btn-label">Create account</span>
+        </button>
+      </form>
+
+      <!-- =============================================================
+           Forgot password form
+      ============================================================== -->
+      <form id="forgotForm" class="auth-form hidden">
+        <p class="text-sm text-soft">We'll email you a link to reset your password.</p>
+        <div class="field" id="forgotEmailField">
+          <label for="forgotEmail">Email</label>
+          <input type="email" id="forgotEmail" placeholder="you@example.com" autocomplete="email" required />
+          <div class="field-error" id="forgotEmailError"></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="forgotSubmit">
+          <span class="btn-label">Send reset link</span>
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+  /* =====================================================================
+     Config — your project credentials
+  ====================================================================== */
+  const SUPABASE_URL = 'https://higyutsevlmuqbimhmai.supabase.co'
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZ3l1dHNldmxtdXFiaW1obWFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTEzMjksImV4cCI6MjA5NzI4NzMyOX0.5YxxXwiDws72MMw2u9GPFjZa-IqPt1eQrkyzpbjPBsE'
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  /* =====================================================================
+     Element refs
+  ====================================================================== */
+  const themeToggle = document.getElementById('themeToggle')
+  const toastStack = document.getElementById('toastStack')
+  const modeTabs = document.getElementById('modeTabs')
+
+  const forms = {
+    signin: document.getElementById('signinForm'),
+    signup: document.getElementById('signupForm'),
+    forgot: document.getElementById('forgotForm'),
+  }
+
+  const resendConfirmBtn = document.getElementById('resendConfirmBtn')
+
+  let currentMode = 'signin'
+  let lastSignupEmail = ''
+
+  /* =====================================================================
+     Theme
+  ====================================================================== */
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme)
+    themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙'
+  }
+  let theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  applyTheme(theme)
+  themeToggle.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark'
+    applyTheme(theme)
+  })
+
+  /* =====================================================================
+     Toasts
+  ====================================================================== */
+  function showToast(message, type = 'info', timeout = 4000) {
+    const el = document.createElement('div')
+    el.className = 'toast ' + (type === 'error' ? 'error' : type === 'warn' ? 'warn' : '')
+    el.textContent = message
+    toastStack.appendChild(el)
+    setTimeout(() => el.remove(), timeout)
+  }
+
+  /* =====================================================================
+     Tab switching
+  ====================================================================== */
+  modeTabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn')
+    if (!btn) return
+    setMode(btn.dataset.mode)
+  })
+
+  function setMode(mode) {
+    currentMode = mode
+    modeTabs.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode))
+    Object.entries(forms).forEach(([key, form]) => form.classList.toggle('hidden', key !== mode))
+    const showOAuth = mode !== 'forgot'
+    document.getElementById('oauthDivider').style.display = showOAuth ? 'flex' : 'none'
+    document.getElementById('oauthRow').style.display = showOAuth ? 'flex' : 'none'
+  }
+
+  /* =====================================================================
+     Validation helpers
+  ====================================================================== */
+  function setFieldError(fieldId, message) {
+    const field = document.getElementById(fieldId)
+    const errorEl = field.querySelector('.field-error')
+    if (message) {
+      field.classList.add('has-error')
+      field.classList.add('shake')
+      setTimeout(() => field.classList.remove('shake'), 400)
+      errorEl.textContent = message
+    } else {
+      field.classList.remove('has-error')
+      errorEl.textContent = ''
+    }
+  }
+
+  function clearErrors(fieldIds) {
+    fieldIds.forEach((id) => setFieldError(id, ''))
+  }
+
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+
+  /* =====================================================================
+     Password show/hide toggles
+  ====================================================================== */
+  document.querySelectorAll('.input-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.target)
+      const showing = input.type === 'text'
+      input.type = showing ? 'password' : 'text'
+      btn.textContent = showing ? '👁' : '🙈'
+    })
+  })
+
+  /* =====================================================================
+     Button loading state
+  ====================================================================== */
+  function setLoading(button, loading, labelWhenLoading) {
+    button.disabled = loading
+    const label = button.querySelector('.btn-label')
+    if (loading) {
+      button.dataset.originalLabel = label.textContent
+      label.innerHTML = ''
+      const spinner = document.createElement('span')
+      spinner.className = 'spinner'
+      label.appendChild(spinner)
+      if (labelWhenLoading) label.append(' ' + labelWhenLoading)
+    } else {
+      label.textContent = button.dataset.originalLabel || label.textContent
+    }
+  }
+
+  /* =====================================================================
+     Already signed in? Skip straight to chat.
+  ====================================================================== */
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) window.location.href = 'chat.html'
+  })
+
+  /* =====================================================================
+     Sign in
+  ====================================================================== */
+  forms.signin.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    clearErrors(['signinEmailField', 'signinPasswordField'])
+    resendConfirmBtn.style.display = 'none'
+
+    const email = document.getElementById('signinEmail').value.trim()
+    const password = document.getElementById('signinPassword').value
+
+    let hasError = false
+    if (!isValidEmail(email)) { setFieldError('signinEmailField', 'Enter a valid email.'); hasError = true }
+    if (!password) { setFieldError('signinPasswordField', 'Enter your password.'); hasError = true }
+    if (hasError) return
+
+    const submitBtn = document.getElementById('signinSubmit')
+    setLoading(submitBtn, true, 'Signing in…')
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    setLoading(submitBtn, false)
+
+    if (error) {
+      if (/confirm/i.test(error.message)) {
+        setFieldError('signinEmailField', 'Please confirm your email first.')
+        lastSignupEmail = email
+        resendConfirmBtn.style.display = 'inline-block'
+      } else {
+        setFieldError('signinPasswordField', error.message)
+      }
+      showToast(error.message, 'error')
+      return
+    }
+
+    showToast('Welcome back!')
+    window.location.href = 'chat.html'
+  })
+
+  resendConfirmBtn.addEventListener('click', async () => {
+    if (!lastSignupEmail) return
+    const { error } = await supabase.auth.resend({ type: 'signup', email: lastSignupEmail })
+    showToast(error ? error.message : 'Confirmation email sent.', error ? 'error' : 'info')
+  })
+
+  /* =====================================================================
+     OAuth — Google / GitHub
+     Supabase handles the whole redirect dance; we just kick it off and
+     send people back to chat.html once they're authenticated.
+  ====================================================================== */
+  async function signInWithProvider(provider) {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin + window.location.pathname.replace('login.html', 'chat.html') },
+    })
+    if (error) showToast(error.message, 'error')
+  }
+
+  document.getElementById('googleOAuthBtn').addEventListener('click', () => signInWithProvider('google'))
+  document.getElementById('githubOAuthBtn').addEventListener('click', () => signInWithProvider('github'))
+
+  /* =====================================================================
+     Sign up
+  ====================================================================== */
+  forms.signup.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    clearErrors(['signupUsernameField', 'signupEmailField', 'signupPasswordField', 'signupConfirmField'])
+
+    const username = document.getElementById('signupUsername').value.trim()
+    const email = document.getElementById('signupEmail').value.trim()
+    const password = document.getElementById('signupPassword').value
+    const confirm = document.getElementById('signupConfirm').value
+
+    let hasError = false
+    if (username.length < 3) { setFieldError('signupUsernameField', 'At least 3 characters.'); hasError = true }
+    if (!isValidEmail(email)) { setFieldError('signupEmailField', 'Enter a valid email.'); hasError = true }
+    if (password.length < 6) { setFieldError('signupPasswordField', 'At least 6 characters.'); hasError = true }
+    if (password !== confirm) { setFieldError('signupConfirmField', "Passwords don't match."); hasError = true }
+    if (hasError) return
+
+    const submitBtn = document.getElementById('signupSubmit')
+    setLoading(submitBtn, true, 'Creating…')
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { username } },
+    })
+
+    setLoading(submitBtn, false)
+
+    if (error) {
+      setFieldError('signupEmailField', error.message)
+      showToast(error.message, 'error')
+      return
+    }
+
+    // Store the chosen username on the profile row (trigger may already have made one)
+    if (data.user) {
+      await supabase.from('profiles').upsert({ id: data.user.id, username })
+    }
+
+    if (!data.session) {
+      lastSignupEmail = email
+      showToast('Check your email to confirm your account, then sign in.', 'info', 6000)
+      setMode('signin')
+      document.getElementById('signinEmail').value = email
+      resendConfirmBtn.style.display = 'inline-block'
+      return
+    }
+
+    showToast('Account created!')
+    window.location.href = 'chat.html'
+  })
+
+  /* =====================================================================
+     Forgot password
+  ====================================================================== */
+  forms.forgot.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    clearErrors(['forgotEmailField'])
+
+    const email = document.getElementById('forgotEmail').value.trim()
+    if (!isValidEmail(email)) { setFieldError('forgotEmailField', 'Enter a valid email.'); return }
+
+    const submitBtn = document.getElementById('forgotSubmit')
+    setLoading(submitBtn, true, 'Sending…')
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/login.html',
+    })
+
+    setLoading(submitBtn, false)
+
+    if (error) {
+      setFieldError('forgotEmailField', error.message)
+      showToast(error.message, 'error')
+      return
+    }
+
+    showToast('If that email exists, a reset link is on its way.', 'info', 6000)
+    setMode('signin')
+  })
+</script>
+</body>
+</html>
