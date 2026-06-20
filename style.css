@@ -433,93 +433,141 @@ input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px
   30% { transform: translateY(-3px); opacity: 1; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .wire-pulse { display: none; }
+  .pulse-dot.live, .eyebrow .live-dot { animation: none; }
+}
+
 /* ---------- 11. Login page layout ---------- */
 .login-page {
   min-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background:
-    radial-gradient(circle at 15% 10%, var(--accent-soft) 0%, transparent 45%),
-    var(--bg);
-}
-.login-wrap {
-  width: 100%;
-  max-width: 860px;
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.85fr);
+  background: var(--bg);
 }
-.marketing-panel {
+
+/* ---- Left: editorial mark + the literal "wire" signature ---- */
+.mark-pane {
   position: relative;
-  background: var(--panel-dark);
-  color: var(--panel-dark-ink);
-  padding: 40px 36px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 22px;
+  justify-content: flex-end;
+  padding: 56px 0 64px 64px;
   overflow: hidden;
+  background: var(--bg);
 }
-.marketing-panel .wordmark { color: var(--accent); display: inline-flex; align-items: center; gap: 10px; }
-.marketing-panel .wordmark .live-dot {
-  width: 7px; height: 7px;
+.mark-pane .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: auto;
+}
+.mark-pane .eyebrow .live-dot {
+  width: 6px; height: 6px;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 0 rgba(194, 104, 61, 0.6);
   animation: pulse-ring 2.2s infinite;
   flex-shrink: 0;
 }
-.marketing-panel p.tagline { color: rgba(242, 239, 231, 0.78); font-family: var(--font-display); font-size: 17px; line-height: 1.5; position: relative; }
-.feature-list { display: flex; flex-direction: column; gap: 14px; position: relative; }
-.feature-item { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: rgba(242, 239, 231, 0.85); }
-.feature-item .dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--accent); margin-top: 6px; flex-shrink: 0;
-}
 
-/* Signature element — an ambient node graph standing in for "presence",
-   the thing this product actually shows you in real time. */
-.panel-graphic {
+.wire-wordmark-wrap { position: relative; }
+.wire-track {
   position: absolute;
-  top: 0; right: 0;
-  width: 240px; height: 260px;
-  pointer-events: none;
-  opacity: 0.9;
-  -webkit-mask-image: linear-gradient(200deg, black 35%, transparent 75%);
-  mask-image: linear-gradient(200deg, black 35%, transparent 75%);
+  left: -4px;
+  right: 8%;
+  top: 50%;
+  height: 1px;
+  background: var(--line);
+  transform: translateY(-0.36em);
+  z-index: 0;
 }
-.panel-graphic .edge { stroke: rgba(242, 239, 231, 0.14); stroke-width: 1; }
-.panel-graphic .node { fill: rgba(242, 239, 231, 0.32); }
-.panel-graphic .node.accent { fill: var(--accent); }
-.panel-graphic .node.live {
-  fill: var(--accent);
-  animation: node-pulse 2.6s ease-in-out infinite;
-}
-.panel-graphic .node.live-delay { animation-delay: 0.9s; }
-@keyframes node-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-.marketing-panel::before {
-  content: '';
+.wire-pulse {
   position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 88% 18%, rgba(194, 104, 61, 0.16) 0%, transparent 55%);
-  pointer-events: none;
+  top: 50%;
+  left: -4px;
+  width: 64px;
+  height: 1px;
+  transform: translateY(-0.36em);
+  background: linear-gradient(90deg, transparent, var(--accent) 35%, var(--accent) 65%, transparent);
+  filter: drop-shadow(0 0 5px var(--accent));
+  animation: travel 4.5s cubic-bezier(.6,0,.4,1) infinite;
+  z-index: 1;
 }
-.auth-panel {
+@keyframes travel {
+  0%   { left: -64px; opacity: 0; }
+  8%   { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { left: 105%; opacity: 0; }
+}
+.wire-wordmark {
+  position: relative;
+  z-index: 2;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(64px, 10vw, 132px);
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.wire-wordmark .accent-letter { color: var(--accent); }
+
+.mark-pane .tagline {
+  position: relative;
+  z-index: 2;
+  margin-top: 22px;
+  max-width: 440px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.mark-pane .tagline strong { color: var(--ink); font-weight: 600; }
+
+.mark-foot {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 28px;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  max-width: 480px;
+}
+.mark-foot-item { display: flex; flex-direction: column; gap: 3px; }
+.mark-foot-item .num { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; }
+.mark-foot-item .label { font-size: 12.5px; color: var(--ink-soft); }
+
+/* ---- Right: unboxed auth column ---- */
+.auth-pane {
   background: var(--surface);
-  padding: 40px 36px;
+  border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  justify-content: flex-end;
+  padding: 56px 56px 64px;
 }
+.auth-pane-inner { width: 100%; max-width: 340px; margin: 0 auto; }
+.auth-pane .pane-index {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 18px;
+}
+.auth-pane .pane-title { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+.auth-pane .pane-sub { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 26px; }
 .auth-panel form { display: flex; flex-direction: column; gap: 14px; }
-.theme-toggle-corner { position: fixed; top: 16px; right: 16px; }
+
+.theme-toggle-corner { position: fixed; top: 20px; right: 20px; z-index: 10; }
 
 /* ---------- 12. Chat page layout ---------- */
 .chat-shell {
@@ -708,9 +756,25 @@ input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px
 }
 
 /* ---------- 13. Responsive ---------- */
-@media (max-width: 860px) {
-  .login-wrap { grid-template-columns: 1fr; max-width: 420px; }
-  .marketing-panel { display: none; }
+@media (max-width: 980px) {
+  .login-page { grid-template-columns: 1fr; }
+  .mark-pane {
+    padding: 28px 24px 32px;
+    justify-content: flex-start;
+    min-height: 0;
+  }
+  .mark-pane .eyebrow { margin-bottom: 28px; }
+  .wire-track { right: 4%; }
+  .wire-wordmark { font-size: clamp(48px, 16vw, 80px); }
+  .mark-foot { display: none; }
+  .auth-pane {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    padding: 32px 24px 48px;
+  }
+}
+@media (max-width: 480px) {
+  .wire-pulse { display: none; }
 }
 @media (max-width: 720px) {
   .chat-shell { grid-template-columns: 1fr; }
