@@ -77,9 +77,28 @@
 
     <div class="composer-wrap">
       <div class="emoji-picker hidden" id="emojiPicker"></div>
+
+      <!-- GIF picker -->
+      <div class="gif-picker hidden" id="gifPicker">
+        <input id="gifSearchInput" class="mono" placeholder="Search GIFs…" />
+        <div class="gif-grid" id="gifGrid"></div>
+      </div>
+
+      <!-- Voice recording bar — replaces composer while recording -->
+      <div class="recording-row hidden" id="recordingRow">
+        <span class="rec-dot"></span>
+        <span id="recordingTimer">0:00</span>
+        <span class="text-sm text-faint">Recording…</span>
+        <div class="spacer"></div>
+        <button type="button" class="btn-icon" id="cancelRecordingBtn" aria-label="Cancel recording">✕</button>
+        <button type="button" class="btn btn-primary" id="stopRecordingBtn" style="padding:8px 14px;">Send</button>
+      </div>
+
       <form class="composer" id="composer">
         <button type="button" class="btn-icon" id="emojiBtn" aria-label="Insert emoji">🙂</button>
+        <button type="button" class="btn-icon" id="gifBtn" aria-label="Insert GIF">GIF</button>
         <textarea id="msgInput" rows="1" placeholder="Type a message…" autocomplete="off"></textarea>
+        <button type="button" class="btn-icon" id="micBtn" aria-label="Record voice message">🎤</button>
         <button type="submit" class="btn btn-primary" id="sendBtn">Send</button>
       </form>
     </div>
@@ -111,12 +130,18 @@
      Config
   ====================================================================== */
   const SUPABASE_URL = 'https://higyutsevlmuqbimhmai.supabase.co'
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZ3l1dHNldmxtdXFiaW1obWFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTEzMjksImV4cCI6MjA5NzI4NzMyOX0.5[...]
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZ3l1dHNldmxtdXFiaW1obWFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MTEzMjksImV4cCI6MjA5NzI4NzMyOX0.5YxxXwiDws72MMw2u9GPFjZa-IqPt1eQrkyzpbjPBsE'
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   const DEFAULT_ROOMS = ['general', 'random']
   const EMOJIS = ['😀','😂','😍','👍','🙏','🎉','🔥','😢','😮','❤️','👀','🚀','💯','😅','🤔','✅']
   const TYPING_TIMEOUT_MS = 3000
+
+  // Tenor public demo key — swap for your own free key at tenor.com/developer/dashboard for production use
+  const TENOR_API_KEY = 'LIVDSRZULELA'
+  const TENOR_CLIENT_KEY = 'wire-chat-app'
+  const VOICE_BUCKET = 'voice-notes'
+  const MAX_RECORDING_MS = 120_000 // 2 minute cap
 
   /* =====================================================================
      Element refs
@@ -158,6 +183,17 @@
   const msgInput = $('msgInput')
   const sendBtn = $('sendBtn')
 
+  const gifBtn = $('gifBtn')
+  const gifPicker = $('gifPicker')
+  const gifSearchInput = $('gifSearchInput')
+  const gifGrid = $('gifGrid')
+
+  const micBtn = $('micBtn')
+  const recordingRow = $('recordingRow')
+  const recordingTimer = $('recordingTimer')
+  const cancelRecordingBtn = $('cancelRecordingBtn')
+  const stopRecordingBtn = $('stopRecordingBtn')
+
   /* =====================================================================
      State
   ====================================================================== */
@@ -171,6 +207,16 @@
   const profileCache = {}    // user_id -> username
   let typingTimeout = null
   let othersTyping = new Map() // user_id -> username, currently typing
+
+  // Voice recording state
+  let mediaRecorder = null
+  let recordedChunks = []
+  let recordingStartedAt = 0
+  let recordingIntervalId = null
+  let recordingStream = null
+
+  // GIF search debounce
+  let gifSearchTimeout = null
 
   /* =====================================================================
      Theme
@@ -424,7 +470,32 @@
 
     const bubble = document.createElement('div')
     bubble.className = 'bubble'
-    bubble.textContent = m.content // textContent escapes content automatically
+
+    const parsed = parseSpecialContent(m.content)
+    if (parsed.type === 'gif') {
+      bubble.classList.add('bubble-media')
+      const img = document.createElement('img')
+      img.src = parsed.url
+      img.alt = 'GIF'
+      img.loading = 'lazy'
+      img.className = 'gif-msg'
+      bubble.appendChild(img)
+    } else if (parsed.type === 'voice') {
+      bubble.classList.add('bubble-media')
+      const audio = document.createElement('audio')
+      audio.src = parsed.url
+      audio.controls = true
+      audio.className = 'voice-msg'
+      bubble.appendChild(audio)
+      if (parsed.duration) {
+        const durTag = document.createElement('span')
+        durTag.className = 'text-xs text-faint'
+        durTag.textContent = formatDuration(parsed.duration)
+        bubble.appendChild(durTag)
+      }
+    } else {
+      bubble.textContent = m.content // textContent escapes content automatically
+    }
 
     wrap.appendChild(meta)
     wrap.appendChild(bubble)
@@ -615,7 +686,10 @@
     })
     emojiPicker.appendChild(btn)
   })
-  emojiBtn.addEventListener('click', () => emojiPicker.classList.toggle('hidden'))
+  emojiBtn.addEventListener('click', () => {
+    gifPicker.classList.add('hidden')
+    emojiPicker.classList.toggle('hidden')
+  })
   document.addEventListener('click', (e) => {
     if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.classList.add('hidden')
   })
@@ -645,6 +719,175 @@
     sendBtn.disabled = false
 
     if (error) showToast(error.message, 'error')
+  }
+
+  /* =====================================================================
+     Special message content — GIFs and voice notes are stored as plain
+     text messages with a tiny prefix tag, so no DB schema change is
+     needed. Format: "[gif]<url>" or "[voice]<url>|<durationSeconds>"
+  ====================================================================== */
+  function parseSpecialContent(content) {
+    if (typeof content !== 'string') return { type: 'text' }
+    if (content.startsWith('[gif]')) {
+      return { type: 'gif', url: content.slice(5) }
+    }
+    if (content.startsWith('[voice]')) {
+      const rest = content.slice(7)
+      const [url, duration] = rest.split('|')
+      return { type: 'voice', url, duration: Number(duration) || 0 }
+    }
+    return { type: 'text' }
+  }
+
+  function formatDuration(totalSeconds) {
+    const m = Math.floor(totalSeconds / 60)
+    const s = Math.floor(totalSeconds % 60)
+    return m + ':' + String(s).padStart(2, '0')
+  }
+
+  async function sendRawContent(content) {
+    if (!currentUser) return
+    const { error } = await supabase
+      .from('messages')
+      .insert({ room_id: currentRoom, user_id: currentUser.id, content })
+    if (error) showToast(error.message, 'error')
+  }
+
+  /* =====================================================================
+     GIF picker — powered by Tenor's public search API
+  ====================================================================== */
+  function openGifPicker() {
+    emojiPicker.classList.add('hidden')
+    gifPicker.classList.toggle('hidden')
+    if (!gifPicker.classList.contains('hidden')) {
+      gifSearchInput.focus()
+      if (!gifGrid.children.length) searchGifs('trending')
+    }
+  }
+  gifBtn.addEventListener('click', openGifPicker)
+
+  document.addEventListener('click', (e) => {
+    if (!gifPicker.contains(e.target) && e.target !== gifBtn) gifPicker.classList.add('hidden')
+  })
+
+  gifSearchInput.addEventListener('input', () => {
+    clearTimeout(gifSearchTimeout)
+    const q = gifSearchInput.value.trim()
+    gifSearchTimeout = setTimeout(() => searchGifs(q || 'trending'), 350)
+  })
+
+  async function searchGifs(query) {
+    gifGrid.innerHTML = '<div class="text-xs text-faint" style="padding:8px;">Loading…</div>'
+    try {
+      const endpoint = query === 'trending'
+        ? `https://tenor.googleapis.com/v2/featured?key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=20`
+        : `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${TENOR_API_KEY}&client_key=${TENOR_CLIENT_KEY}&limit=20`
+      const res = await fetch(endpoint)
+      const data = await res.json()
+      renderGifResults(data.results || [])
+    } catch (err) {
+      gifGrid.innerHTML = '<div class="text-xs text-faint" style="padding:8px;">Couldn\'t load GIFs right now.</div>'
+    }
+  }
+
+  function renderGifResults(results) {
+    gifGrid.innerHTML = ''
+    if (!results.length) {
+      gifGrid.innerHTML = '<div class="text-xs text-faint" style="padding:8px;">No GIFs found.</div>'
+      return
+    }
+    results.forEach((item) => {
+      const previewUrl = item.media_formats?.tinygif?.url || item.media_formats?.gif?.url
+      const fullUrl = item.media_formats?.gif?.url || previewUrl
+      if (!previewUrl) return
+      const thumb = document.createElement('button')
+      thumb.type = 'button'
+      thumb.className = 'gif-thumb'
+      const img = document.createElement('img')
+      img.src = previewUrl
+      img.loading = 'lazy'
+      img.alt = item.content_description || 'GIF'
+      thumb.appendChild(img)
+      thumb.addEventListener('click', async () => {
+        gifPicker.classList.add('hidden')
+        gifSearchInput.value = ''
+        await sendRawContent('[gif]' + fullUrl)
+      })
+      gifGrid.appendChild(thumb)
+    })
+  }
+
+  /* =====================================================================
+     Voice recording — MediaRecorder → Supabase Storage → message row
+  ====================================================================== */
+  micBtn.addEventListener('click', startRecording)
+  cancelRecordingBtn.addEventListener('click', () => stopRecording(false))
+  stopRecordingBtn.addEventListener('click', () => stopRecording(true))
+
+  async function startRecording() {
+    if (mediaRecorder) return
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      showToast('Microphone access denied or unavailable.', 'error')
+      return
+    }
+    recordingStream = stream
+    recordedChunks = []
+    mediaRecorder = new MediaRecorder(stream)
+    mediaRecorder.addEventListener('dataavailable', (e) => {
+      if (e.data.size > 0) recordedChunks.push(e.data)
+    })
+    mediaRecorder.start()
+    recordingStartedAt = Date.now()
+
+    composer.classList.add('hidden')
+    recordingRow.classList.remove('hidden')
+    recordingTimer.textContent = '0:00'
+    recordingIntervalId = setInterval(() => {
+      const elapsedMs = Date.now() - recordingStartedAt
+      recordingTimer.textContent = formatDuration(elapsedMs / 1000)
+      if (elapsedMs >= MAX_RECORDING_MS) stopRecording(true)
+    }, 250)
+  }
+
+  function stopRecording(shouldSend) {
+    if (!mediaRecorder) return
+    const durationSeconds = (Date.now() - recordingStartedAt) / 1000
+    const recorder = mediaRecorder
+    const finish = async () => {
+      clearInterval(recordingIntervalId)
+      recordingStream?.getTracks().forEach((t) => t.stop())
+      recordingRow.classList.add('hidden')
+      composer.classList.remove('hidden')
+      mediaRecorder = null
+      recordingStream = null
+
+      if (shouldSend && recordedChunks.length) {
+        await uploadAndSendVoiceNote(durationSeconds)
+      }
+      recordedChunks = []
+    }
+    recorder.addEventListener('stop', finish, { once: true })
+    recorder.stop()
+  }
+
+  async function uploadAndSendVoiceNote(durationSeconds) {
+    const blob = new Blob(recordedChunks, { type: 'audio/webm' })
+    const fileName = `${currentUser.id}/${Date.now()}.webm`
+    sendBtn.disabled = true
+    const { error: uploadError } = await supabase.storage
+      .from(VOICE_BUCKET)
+      .upload(fileName, blob, { contentType: 'audio/webm' })
+    sendBtn.disabled = false
+
+    if (uploadError) {
+      showToast('Voice upload failed: ' + uploadError.message, 'error')
+      return
+    }
+    const { data } = supabase.storage.from(VOICE_BUCKET).getPublicUrl(fileName)
+    await sendRawContent('[voice]' + data.publicUrl + '|' + Math.round(durationSeconds))
   }
 
   /* =====================================================================
