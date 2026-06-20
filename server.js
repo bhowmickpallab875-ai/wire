@@ -127,8 +127,9 @@ function applySecurityHeaders(res) {
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com; " +
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co; " +
-    "img-src 'self' data:;"
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://tenor.googleapis.com; " +
+    "img-src 'self' data: https://media.tenor.com https://*.supabase.co; " +
+    "media-src 'self' blob: https://*.supabase.co;"
   )
 }
 
