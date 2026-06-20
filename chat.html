@@ -277,22 +277,25 @@
   }
 
   /* =====================================================================
-     Auth gate — FIXED: Check session first, then setup listener
+     Auth gate
   ====================================================================== */
   async function initAuth() {
     const { data: { session } } = await supabase.auth.getSession()
-    
+
     if (!session) {
       window.location.href = 'login.html'
       return
     }
-    
+
     // Session exists, boot the app
     await boot(session)
-    
-    // ONLY after session check is complete, listen for auth changes (sign out events)
-    supabase.auth.onAuthStateChange((_event, currentSession) => {
-      if (!currentSession) {
+
+    // Only redirect on an EXPLICIT sign-out event — not on every falsy
+    // session, since onAuthStateChange can fire once with a stale/null
+    // session right after subscribing (token refresh in flight, tab
+    // visibility changes, etc.) even while the user is still logged in.
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
         window.location.href = 'login.html'
       }
     })
