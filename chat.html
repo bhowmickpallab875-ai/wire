@@ -279,29 +279,24 @@
   /* =====================================================================
      Auth gate
   ====================================================================== */
-  async function initAuth() {
-    const { data: { session } } = await supabase.auth.getSession()
+  let authInitialized = false
 
-    if (!session) {
-      window.location.href = 'login.html'
-      return
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (!authInitialized) {
+      authInitialized = true
+
+      if (!session) {
+        window.location.href = 'login.html'
+        return
+      }
+
+      await boot(session)
     }
 
-    // Session exists, boot the app
-    await boot(session)
-
-    // Only redirect on an EXPLICIT sign-out event — not on every falsy
-    // session, since onAuthStateChange can fire once with a stale/null
-    // session right after subscribing (token refresh in flight, tab
-    // visibility changes, etc.) even while the user is still logged in.
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
-        window.location.href = 'login.html'
-      }
-    })
-  }
-
-  initAuth()
+    if (event === 'SIGNED_OUT') {
+      window.location.href = 'login.html'
+    }
+  })
 
   async function boot(session) {
     currentUser = session.user
