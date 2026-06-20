@@ -6,7 +6,7 @@
 <title>Wire — sign in</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="login-page">
@@ -21,27 +21,36 @@
   ==================================================================== -->
   <div id="toastStack" class="toast-stack" aria-live="polite"></div>
 
-  <div class="login-wrap card">
+  <!-- =================================================================
+       Mark pane — the wordmark IS the design. A literal wire runs
+       through it, with a signal pulse traveling along it on a loop.
+  ================================================================== -->
+  <div class="mark-pane">
+    <span class="eyebrow"><span class="live-dot"></span>Real-time, end to end</span>
 
-    <!-- =================================================================
-         Marketing panel — hidden on small screens, see style.css
-    ================================================================== -->
-    <div class="marketing-panel">
-      <div class="wordmark lg">WIRE</div>
-      <p class="tagline">Real-time messaging, built on Supabase. No backend to babysit.</p>
-      <div class="feature-list">
-        <div class="feature-item"><span class="dot"></span><span>Messages appear instantly, no refresh, powered by Postgres realtime.</span></div>
-        <div class="feature-item"><span class="dot"></span><span>Hop between rooms, or spin up a new one in a second.</span></div>
-        <div class="feature-item"><span class="dot"></span><span>See who's online and who's typing, live.</span></div>
-        <div class="feature-item"><span class="dot"></span><span>Your account is protected by Row Level Security on every table.</span></div>
-      </div>
+    <div class="wire-wordmark-wrap">
+      <span class="wire-track" aria-hidden="true"></span>
+      <span class="wire-pulse" aria-hidden="true"></span>
+      <h1 class="wire-wordmark">W<span class="accent-letter">i</span>re</h1>
     </div>
 
-    <!-- =================================================================
-         Auth panel
-    ================================================================== -->
-    <div class="auth-panel">
-      <div class="wordmark md" style="color: var(--accent)">WIRE</div>
+    <p class="tagline">A small, fast place to talk. <strong>Messages land the instant they're sent</strong> — no refresh, no polling, built straight on Postgres realtime.</p>
+
+    <div class="mark-foot">
+      <div class="mark-foot-item"><span class="num">00</span><span class="label">No backend to babysit</span></div>
+      <div class="mark-foot-item"><span class="num">01</span><span class="label">Rooms made on the fly</span></div>
+      <div class="mark-foot-item"><span class="num">02</span><span class="label">Row Level Security throughout</span></div>
+    </div>
+  </div>
+
+  <!-- =================================================================
+       Auth pane — unboxed, sits directly on its own surface
+  ================================================================== -->
+  <div class="auth-pane">
+    <div class="auth-pane-inner">
+      <span class="pane-index mono">03 — Access</span>
+      <h2 class="pane-title" id="paneTitle">Welcome back</h2>
+      <p class="pane-sub" id="paneSub">Sign in to pick up where you left off.</p>
 
       <!-- Mode tabs -->
       <div class="tabs" id="modeTabs">
@@ -53,7 +62,7 @@
       <!-- =============================================================
            Sign in form
       ============================================================== -->
-      <form id="signinForm" class="auth-form">
+      <form id="signinForm" class="auth-form" style="margin-top:22px;">
         <div class="field" id="signinEmailField">
           <label for="signinEmail">Email</label>
           <input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email" required />
@@ -96,7 +105,7 @@
       <!-- =============================================================
            Sign up form
       ============================================================== -->
-      <form id="signupForm" class="auth-form hidden">
+      <form id="signupForm" class="auth-form hidden" style="margin-top:22px;">
         <div class="field" id="signupUsernameField">
           <label for="signupUsername">Username</label>
           <input type="text" id="signupUsername" placeholder="how others will see you" autocomplete="nickname" required minlength="3" maxlength="20" />
@@ -132,7 +141,7 @@
       <!-- =============================================================
            Forgot password form
       ============================================================== -->
-      <form id="forgotForm" class="auth-form hidden">
+      <form id="forgotForm" class="auth-form hidden" style="margin-top:22px;">
         <p class="text-sm text-soft">We'll email you a link to reset your password.</p>
         <div class="field" id="forgotEmailField">
           <label for="forgotEmail">Email</label>
@@ -172,6 +181,14 @@
   }
 
   const resendConfirmBtn = document.getElementById('resendConfirmBtn')
+  const paneTitle = document.getElementById('paneTitle')
+  const paneSub = document.getElementById('paneSub')
+
+  const PANE_COPY = {
+    signin: ['Welcome back', "Sign in to pick up where you left off."],
+    signup: ['Create an account', 'Takes about ten seconds. No credit card, obviously.'],
+    forgot: ['Reset your password', "We'll email you a link to get back in."],
+  }
 
   let currentMode = 'signin'
   let lastSignupEmail = ''
@@ -217,6 +234,9 @@
     const showOAuth = mode !== 'forgot'
     document.getElementById('oauthDivider').style.display = showOAuth ? 'flex' : 'none'
     document.getElementById('oauthRow').style.display = showOAuth ? 'flex' : 'none'
+    const [title, sub] = PANE_COPY[mode]
+    paneTitle.textContent = title
+    paneSub.textContent = sub
   }
 
   /* =====================================================================
@@ -334,7 +354,7 @@
   async function signInWithProvider(provider) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: 'https://bhowmickpallab875-ai.github.io/wire/chat.html' },
+      options: { redirectTo: window.location.origin + window.location.pathname.replace('login.html', 'chat.html') },
     })
     if (error) showToast(error.message, 'error')
   }
